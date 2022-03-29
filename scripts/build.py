@@ -13,6 +13,7 @@ Output framework is located in out/Woogeen.framework.
 
 import os
 import subprocess
+import logging
 import argparse
 import sys
 import shutil
@@ -26,7 +27,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)),'build',
 sys.path.append(os.path.join(HOME_PATH, 'third_party', 'webrtc','tools_webrtc','apple'))
 import sdk_info
 import copy_framework_header
-
 
 OUT_PATH = os.path.join(HOME_PATH, 'out')
 # The lib contains all target architectures and external libs(OpenSSL).
@@ -53,10 +53,12 @@ TEST_ARCH = 'x64'  # Tests run on simulator
 TEST_SCHEME = 'debug'
 TEST_SIMULATOR_DEVICE = 'iPhone X'
 
-def gngen(arch, ssl_root, scheme):
-  gn_args = 'target_os="ios" target_cpu="%s" is_component_build=false '\
-      'ios_enable_code_signing=false ios_deployment_target="9.0" use_xcode_clang=true '\
-      'rtc_libvpx_build_vp9=true enable_ios_bitcode=true rtc_use_h265=true'%arch
+def gngen(environment, arch, ssl_root, scheme):
+  gn_args = ('target_os="ios" target_cpu="%s" is_component_build=false '\
+      'ios_enable_code_signing=false ios_deployment_target="10.0" use_xcode_clang=true '\
+      'rtc_include_tests=false target_environment="%s" '\
+      'use_goma=false rtc_enable_symbol_export=true '\
+      'rtc_libvpx_build_vp9=true enable_ios_bitcode=false enable_dsyms=true rtc_use_h265=true')%(arch, environment)
   if(scheme=='release'):
     gn_args += (' is_debug=false enable_stripping=true')
   else:
@@ -64,7 +66,8 @@ def gngen(arch, ssl_root, scheme):
   if ssl_root:
     gn_args += (' owt_use_openssl=true owt_openssl_header_root="%s" '\
         'owt_openssl_lib_root="%s"'%(ssl_root+'/include',ssl_root+'/lib'))
-  ret = subprocess.call(['gn', 'gen', getoutputpath(arch, scheme), '--args=%s' % gn_args],
+  print(['gn', 'gen', getoutputpath(arch, scheme), '--args=%s' % gn_args, '-v'])
+  ret = subprocess.call(['gn', 'gen', getoutputpath(arch, scheme), '--args=%s' % gn_args, '-v'],
                         cwd=HOME_PATH, shell=False)
   if ret == 0:
     return True
@@ -194,14 +197,17 @@ def main():
       return 1
     else:
       if not opts.skip_gn_gen:
-        if not gngen(arch_item, opts.ssl_root, opts.scheme):
+        environment = 'simulator'
+        if arch_item == 'arm64' or arch_item == 'arm':
+          environment = 'device'
+        if not gngen(environment, arch_item, opts.ssl_root, opts.scheme):
           return 1
       if not ninjabuild(arch_item, opts.scheme, SDK_TARGETS):
         return 1
   dist(opts.arch, opts.scheme, opts.ssl_root)
   if not opts.skip_tests:
     if not opts.skip_gn_gen:
-      if not gngen(TEST_ARCH, opts.ssl_root, TEST_SCHEME):
+      if not gngen("simulator", TEST_ARCH, opts.ssl_root, TEST_SCHEME):
         return 1
     if not runtest(opts.ssl_root):
       return 1
