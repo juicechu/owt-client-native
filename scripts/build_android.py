@@ -23,7 +23,8 @@ def gn_gen(arch, debug):
     gn_args = '--args=target_os=\"android\" is_component_build=false rtc_include_tests=false '\
               'target_cpu=\"' + arch +\
               '\" is_debug=' + ('true' if debug else 'false') +\
-              ' rtc_use_h265=true'
+              ' use_goma=false rtc_enable_symbol_export=true '\
+              'rtc_libvpx_build_vp9=false enable_dsyms=true rtc_use_h265=true'
     cmd = ['gn', 'gen', output_location, gn_args]
     if subprocess.call(cmd) :
         sys.exit(1)
